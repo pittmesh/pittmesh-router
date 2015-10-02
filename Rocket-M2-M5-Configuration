@@ -1,0 +1,171 @@
+PittMesh Standard v1 (Rocket M2/M5 Meshed over WiFi (MoW)
+
+Convert Hexadecimal to Decimal: http://www.binaryhexconverter.com/hex-to-decimal-converter
+MAC address: 68:72:51:23:30:01 = 35.48.1
+MESH: 100.35.48.1/8
+WLAN:10.48.1.1/24
+
+(have access to a dhcp server on the network? Use this command to watch for the next dhcp lease! tail -f /var/log/messages | grep dhc &)
+
+Install Openwrt
+
+Plug into LAN switch
+
+Set network Interface to your house network. set DNS to 8.8.8.8
+
+opkg update
+
+opkg install luci luci-ssl pciutils luci-app-olsr luci-app-olsr-services luci-app-olsr-viz olsrd olsrd-mod-arprefresh olsrd-mod-bmf olsrd-mod-dot-draw olsrd-mod-dyn-gw olsrd-mod-dyn-gw-plain olsrd-mod-httpinfo olsrd-mod-mdns olsrd-mod-nameservice olsrd-mod-p2pd olsrd-mod-pgraph olsrd-mod-secure olsrd-mod-txtinfo olsrd-mod-watchdog olsrd-mod-quagga wireless-tools luci-lib-json kmod-ipip ethtool snmpd iptables-mod-extra iptables-mod-iface iptables-mod-iprange
+
+Opkg update
+
+Opkg list-upgradable
+
+Upgrade all listed packages with this command: 
+
+for i in `opkg list-upgradable|cut -d " " -f 1`;do opkg install $i;done
+
+System  >  Startup 
+Enable SNMPD
+
+System > Startup
+Stop odhcpd
+Disable odhcpd
+
+System  >  System
+Change the Hostname to the correct format: all lowercase: model-location-bandnumber (rocketm2-thehardwarestore-2401)
+
+Under Time Synchronization:
+Check Provide NTP server
+Enter 10.66.6.1 in first slot
+
+System  >  System  >  Logging
+ENTER NIC ETH2 (port3) IP ON METAMESH01 (172.16.32.1 at THS or x.x.x.x) anywhere else on the mesh.
+Log Output Level: Warning
+
+Services> OLSRv4>Plugins
+Enable olsrd_jsoninfo.so.0.0 
+Enable olsrd_mdns.so.1.0.1 
+
+Network  >  Interfaces
+Delete WAN6
+
+Network  >  Interfaces
+Delete WAN
+
+Network  >  Interfaces
+LAN MAC-Address: copy the MAC address down and then calculate IPV4 address based on MAC address by converting Hexadecimal to Decimal: http://www.binaryhexconverter.com/hex-to-decimal-converter
+
+MAC address: 68:72:51:23:30:01 = 35.48.1
+MESH: 100.35.48.1/8
+WLAN:10.48.1.1/24
+
+Once you have converted MAC to IP, click ADD NEW INTERFACE
+Name: wlan
+Protocol: Static address
+Cover the following interface: Wireless Network: Master
+
+IPv4 address: Enter converted IP address from MAC for WLAN
+Netmask: 255.255.255.0
+NO gateway
+NO broadcast
+NO custom DNS servers
+Click SAVE
+
+Under DHCP Server click Setup DHCP Server
+Start: 10
+Limit: 253
+Leasetime: 1h
+Advanced Settings tab: Check the box next to Force.
+Save and Apply
+
+Network  >  Interfaces
+Add New Interface
+Name: mesh
+Cover the following interface: Wireless Network Master
+Protocol: Static address
+IPv4 address: Enter Converted IP address from MAC to MESH
+NO gateway
+NO broadcast
+NO custom DNS servers
+
+Network  >  WiFi > Edit OpenWRT
+Channel 11
+ESSID: PittMesh-location-bandnumber (PittMesh-SweetPeaches-2401)
+Mode: Access Point
+Network: wlan
+
+Network> WiFi
+Radio1: Add
+ESSID: PittMesh-Backhaul
+Mode: Ad-Hoc
+Network: mesh
+
+Network > WiFi
+Enable one wifi network (SLOWLY! The other will turn on with the first)
+
+Services  >  OLSR IPv4
+Scroll down, under Interfaces: click EDIT
+Network: mesh
+
+Services > OLSR IPv4
+HNA Announcements tab
+Click Add
+Network Address: 0.0.0.0
+Netmask: 0.0.0.0
+
+Click Add (if you want to allow the locally connected wlan clients to be mesh accessible (recommended))
+Network Address: The first 3 octets of the converted IP address for the wlan network: 10.48.1 and then a 0. 10.48.1.0
+Netmask: 255.255.255.0
+
+Services > OLSR IPv4
+Link Quality Settings Tab
+LQ Algorithm “etx_ffeth”
+
+Network  >  Firewall
+Delete WAN Zone
+
+Network > Firewall 
+General Settings: Forward: Accept
+
+Network > Firewall
+Add
+Name: wlan
+Network: wlan
+
+Network > Firewall
+Add
+Name: mesh
+Network: mesh
+Inter-Zone Forwarding:
+Allow forward to destination zones: wlan
+Allow forward from source zones: lan, wlan
+
+Network > Firewall
+Inter-Zone Forwarding:
+Allow forward to destination zones: wlan, mesh
+
+Firewall should look like:
+lan => mesh, wlan | accept accept accept | Masquerading checked
+wlan => mesh | accept accept accept | Masquerading checked
+mesh => wlan | accept accept accept | Masquerading checked
+
+Network  >  DHCP and DNS
+DNS forwardings: 8.8.8.8
+
+Network  >  Firewall > Custom Rules Tab
+
+iptables -I FORWARD -i wlan0-1 -d 192.168.0.0/16 -j DROP
+iptables -I FORWARD -i wlan0-1 -d 10.0.0.0/8 -j DROP
+iptables -I FORWARD -i wlan0-1 -d 172.16.0.0/16 -j DROP
+
+
+
+
+
+
+
+
+
+
+
