@@ -1,0 +1,249 @@
+Requirements for INTERNET CONNECTED routers:
+
+IP:
+Mesh network: 100.x.x.x/10 
+The last three octets are derived from the last 3 segments of the ETHERNET MAC address and converted from their hex format to decimal and placed into their respective octet locations per their position in the MAC address.
+the second octet is no less that 64 and no more than 127. The MAC address is converted in modulo so that MAC=00 is IP=64 etc until IP=127 is reached and then the next MAC number becomes 64 again. See this chart: https://github.com/pittmesh/ip-calculator/issues/3
+
+
+WLAN network: 10.x.x.1/24 
+	The second and third octets are converted to the 3rd and 4th octets of the MESH interface. The Router always uses 1 as its own IP address for this interface.
+
+SYSTEM:
+The System name should be the MESH interface’s IP address.
+The Time server should be set to 10.66.6.1
+A log server should be set to 10.10.220.6
+run this command: uci set uhttpd.main.rfc1918_filter=0; uci commit uhttpd
+run this command: /etc/init.d/uhttpd restart
+run this command: uci set snmpd.public.community=PittmeshSNMP
+run this command: /etc/init.d/snmpd restart
+Set DNS forwardings to 96.89.42.101
+
+WIFI:
+For 2.4GHz-only devices:
+Delete all current SSIDs
+ADD MESH SSID:
+Set SSID of MESH interface: PittMesh-Backhaul
+Set Network to only MESH
+Set channel to 11
+Set distance optimization to 5000
+Set mode to ad-hoc
+Enable SSID
+ADD WLAN SSID:
+Set SSID to “PittMesh-RANDOMSTRING-2401
+Set Network to only WLAN
+Set channel to 11
+Set mode Access Point
+Enable SSID
+For 5 GHz-only devices:
+Delete all current SSIDs
+ADDMESH SSID:
+Set SSID of MESH interface: PittMesh-Backhaul
+Set Network to only MESH
+Set channel to 48
+Set distance optimization to 5000
+Set mode to ad-hoc
+Enable SSID
+ADD WLAN SSID:
+Set SSID to “PittMesh-RANDOMSTRING-501
+Set Network to only WLAN
+Set channel to 48
+Set mode Access Point
+Enable SSID
+For Dual-band devices:
+Delete all current SSIDs
+ADD MESH 2.4GHz SSID:
+Set SSID of MESH interface: PittMesh-Backhaul
+Set Network to only MESH
+Set channel to 11
+Set distance optimization to 5000
+Set mode to ad-hoc
+Enable SSID
+WLAN 2.4GHz SSID:
+Set SSID to “PittMesh-RANDOMSTRING-2401
+Set Network to only WLAN
+Set channel to 11
+Set mode Access Point
+Enable SSID
+WLAN 5GHz SSID:
+Set SSID to “PittMesh-RANDOMSTRING-2401
+Set Network to only WLAN
+Set channel to 48
+Set mode Access Point
+Enable SSID
+
+DHCP:
+The Ethernet interface needs to accept a DHCP lease from an upstream router.
+
+A DHCP server needs to be implemented on the WLAN interface for:
+	begin: 10
+	end: 253
+	duration: 1h
+	FORCE=YES (to ensure that the router is the authoritative DHCP server for the WLAN interface and not using the upstream DHCP server which WILL happen if you do not “force”)
+
+
+PREINSTALLED PACKAGES:
+opkg install luci luci-ssl pciutils luci-app-olsr luci-app-olsr-services luci-app-olsr-viz olsrd olsrd-mod-arprefresh olsrd-mod-bmf olsrd-mod-dot-draw olsrd-mod-dyn-gw olsrd-mod-dyn-gw-plain olsrd-mod-httpinfo olsrd-mod-mdns olsrd-mod-nameservice olsrd-mod-p2pd olsrd-mod-pgraph olsrd-mod-secure olsrd-mod-txtinfo olsrd-mod-watchdog olsrd-mod-quagga wireless-tools luci-lib-json kmod-ipip ethtool snmpd iptables-mod-extra iptables-mod-iface iptables-mod-iprange
+
+
+OLSR:
+Enable plugin olsrd_jsoninfo.so.0.0
+ADD HNA4 announcment 0.0.0.0 netmask 0.0.0.0
+ADD HNA4 announcment for 10.x.x.0 subnet (where x.x is the subnet derived from the mac-to-IP conversion earlier)
+Change Link Quality Algorithm from etx_ff to etx_ffeth
+Set Meshing interface to include MESH interface and enable
+Set second meshing interface to include eth interface and enable
+	
+FIREWALL:
+General Settings: Change reject to accept
+Delete Wan Zone
+Enable masquerading for LAN zone
+Add new zone MESH
+Add new zone WLAN
+On zone WLAN, allow forwarding FROM LAN and to MESH
+On zone MESH, allow forwarding FROM LAN and to WLAN
+under custom rules drop in: 
+	iptables -I FORWARD -i wlan0-1 -d 192.168.0.0/16 -j DROP
+iptables -I FORWARD -i wlan0-1 -d 10.0.0.0/8 -j DROP
+iptables -I FORWARD -i wlan0-1 -d 172.16.0.0/16 -j DROP
+
+UPDATE:
+	This command should be run to update all packages: 
+for i in `opkg list-upgradable|cut -d " " -f 1`;do opkg install $i;done
+
+
+
+
+
+
+MAC2IP Script:
+#!/bin/ash
+#
+# Script written for pittmesh  y sagerdearia
+# Updated by drewzhrodague
+#
+
+
+
+# Check for --listall, otherwise proceed
+
+if [ "$*" = "--listall" ]; then
+  mac1=DC
+  mac2=9F
+  mac3=DB
+  mac4=00
+  mac5=00
+  mac6=00
+
+  ip1=100
+  ip2=64
+  ip3=0
+  ip4=0
+
+  for ip2 in `seq 0 255`;do
+    #((ip2s63=ip2-63))
+    #((ip2=ip2-63))
+    
+    mac4=`echo "obase=16; $ip2" | bc`
+
+#    ((ip2=(ip2+64)%64 + 64))
+
+#    # Adjust ip 2nd octet to cycle through 64-127 four times
+#    if [ $ip2 -ge 256 ]; then
+#      ((ip2-=192))
+#    elif [ $ip2 -ge 192 ]; then
+#      ((ip2-=128))
+#    elif [ $ip2 -ge 128 ]; then
+#      ((ip2-=64))
+#    fi
+#    ip2=$((ip2 % 64 + 63))
+    
+    # Pad with 0 
+    if [ ${#mac4} -eq 1 ]; then mac4=0$mac4; fi
+
+#    for ip3 in `seq 255`;do
+#      mac5=`echo "obase=16; $ip3" | bc`
+
+#      # Pad with 0 
+#      if [ ${#mac5} -eq 1 ]; then mac5=0$mac5; fi
+
+#      for ip4 in `seq 255`;do
+#        mac6=`echo "obase=16; $ip4" | bc`
+
+#        # Pad with 0 
+#        if [ ${#mac6} -eq 1 ]; then mac6=0$mac6; fi
+
+        # Format IP address
+        ip="$ip1.$ip2.$ip3.$ip4"
+
+        # Format MAC address
+        mac="$mac1:$mac2:$mac3:$mac4:$mac5:$mac6"
+
+        # Pad with space
+        space=`printf '%*s' "$((15 - ${#ip}))"`
+
+        # Output matching IP address and MAC address
+        echo "$ip $space=> $mac"
+#      done
+#    done
+  done
+  exit
+fi
+
+# Proceed if not --listall
+
+# Get # of arguments passed to this script
+args=$#
+
+# # of arguments should be 1 or 6
+# 1 -> DC:9F:DB:CE:13:57 -or- DC-9F-DB-CE-13-57
+# 6 -> DC 9F DB CE 13 57
+
+if [ $args -eq 1 ]; then
+  # Split 1 argument into 6 separate arguments, 1 for each octet
+  # and pass the 6 arguments to a new instance of this script
+  $0 `echo $1 | tr ":-" " "`
+  # After the new instance completes, make sure to end this one
+  exit
+elif [ $args -eq 6 ]; then
+  mac1=`echo $1|tr [a-z] [A-Z]`
+  mac2=`echo $2|tr [a-z] [A-Z]`
+  mac3=`echo $3|tr [a-z] [A-Z]`
+  mac4=`echo $4|tr [a-z] [A-Z]`
+  mac5=`echo $5|tr [a-z] [A-Z]`
+  mac6=`echo $6|tr [a-z] [A-Z]`
+else
+  echo "Usage: $0 <MAC address>"
+  echo "Usage: $0 --listall"
+  echo
+  echo "examples:"
+  echo "  $0 DC:9F:DB:CE:13:57"
+  echo "  $0 DC-9F-DB-CE-13-57"
+  echo "  $0 DC 9F DB CE 13 57"
+  echo "  $0 dc 9f db ce 13 57"
+
+  exit
+fi
+
+# Ensure that we are working with the correct large MAC address block
+# DC-9F-DB
+
+if [ ! $mac1 = "DC" -o ! $mac2 = "9F" -o ! $mac3 = "DB" ]; then
+  echo "Invalid MAC address. Make sure it begins with DC:9F:DB"
+  exit
+fi
+
+# Convert last three hexadecimal octets to decimal values
+ip1=100
+ip2=`echo "ibase=16; $mac4" | bc`
+ip3=`echo "ibase=16; $mac5" | bc`
+ip4=`echo "ibase=16; $mac6" | bc`
+
+# nmap -sL -n 100.64.0.0/10
+# DC:9F:DB:01:01:01 - DC:9F:DB:FF:FF:FF
+# 100.64.0.0        - 100.127.255.255
+
+#((ip2+=63))
+
+echo "$ip1.$ip2.$ip3.$ip4"
+#printf "%x\n" $oct4|tr [a-z] [A-Z]
