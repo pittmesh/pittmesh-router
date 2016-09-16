@@ -105,7 +105,7 @@ On zone MESH, allow forwarding FROM LAN and to WLAN
 under custom rules drop in: 
 	iptables -I FORWARD -i wlan0-1 -d 192.168.0.0/16 -j DROP
 iptables -I FORWARD -i wlan0-1 -d 10.0.0.0/8 -j DROP
-iptables -I FORWARD -i wlan0-1 -d 172.16.0.0/16 -j DROP
+iptables -I FORWARD -i wlan0-1 -d 172.16.0.0/12 -j DROP
 
 UPDATE:
 	This command should be run to update all packages: 
